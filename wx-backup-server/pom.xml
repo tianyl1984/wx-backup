@@ -46,12 +46,23 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.4.0</version>
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.tianyl.tgdustpan.Demo</mainClass>
+                            <mainClass>com.tianyl.wxbackup.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
