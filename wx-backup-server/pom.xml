@@ -4,10 +4,10 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.tianyl.wx-backup</groupId>
-        <artifactId>wx-backup-parent</artifactId>
+        <artifactId>wx-backup</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-    <artifactId>wx-backup</artifactId>
+    <artifactId>wx-backup-server</artifactId>
     <packaging>jar</packaging>
     <version>1.0.0-SNAPSHOT</version>
 
