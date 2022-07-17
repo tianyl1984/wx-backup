@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,10 @@ public class Utils {
 
     public static boolean isEmpty(String value) {
         return value == null || value.trim().length() == 0;
+    }
+
+    public static boolean isEmpty(Collection<?> coll) {
+        return coll == null || coll.isEmpty();
     }
 
     public static String toJSONString(Object object) {
