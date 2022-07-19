@@ -1,7 +1,7 @@
 package com.tianyl.wxbackup.mapper.core;
 
-import com.tianyl.wxbackup.Utils;
 import com.tianyl.wxbackup.core.Func;
+import com.tianyl.wxbackup.core.Utils;
 import com.tianyl.wxbackup.db.ConnectionManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,10 +10,8 @@ import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class BaseMapper<T> {
 
@@ -33,13 +31,134 @@ public class BaseMapper<T> {
         return list.get(0);
     }
 
+    public int save(T t) {
+        // insert into tab(id,name) value(?,?)
+        String sql = getInsertSql();
+        List<Object> values = getValues(t);
+        try (Connection conn = ConnectionManager.getConn()) {
+            PreparedStatement ps = conn.prepareStatement(sql);
+            for (int i = 0; i < values.size(); i++) {
+                ps.setObject(i + 1, values.get(i));
+            }
+            return ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("execute sql exception", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int update(T t) {
+        // update tab set a = ? , b = ? , c = ? where id = ?
+        String tab = getTable();
+        String idColumn = getIdColumn();
+        Object id = getPrimaryKeyValue(t);
+        List<Object> values = new ArrayList<>();
+        Field[] fields = getGenericClass().getDeclaredFields();
+        String sql = String.format("update %s set ", tab);
+        for (Field field : fields) {
+            boolean isPK = isPrimaryKey(field);
+            if (isPK) {
+                continue;
+            }
+            Object value = getFieldValue(field, t);
+            if (value == null) {
+                continue;
+            }
+            values.add(value);
+            sql += String.format("%s = ?,", getColumn(field));
+        }
+        sql = sql.substring(0, sql.length() - 1);
+        sql += String.format(" where %s = ?", idColumn);
+        values.add(id);
+        return executeSql(sql, values.toArray());
+    }
+
+    private Object getFieldValue(Field field, T t) {
+        field.setAccessible(true);
+        try {
+            return field.get(t);
+        } catch (IllegalAccessException e) {
+            logger.error("get field value exception", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Object getPrimaryKeyValue(T t) {
+        Field[] fields = getGenericClass().getDeclaredFields();
+        for (Field field : fields) {
+            boolean isPK = isPrimaryKey(field);
+            if (!isPK) {
+                continue;
+            }
+            return getFieldValue(field, t);
+        }
+        throw new RuntimeException("未标记id");
+    }
+
+    private String getInsertSql() {
+        String tab = getTable();
+        List<String> columns = getAllColumns();
+        List<String> params = columns.stream().map(e -> "?").collect(Collectors.toList());
+        return String.format("insert into %s(%s) values(%s)", tab, String.join(",", columns), String.join(",",
+                params));
+    }
+
+    public void saveBatch(List<T> list) {
+        List<List<T>> dataList = Utils.splitList(list);
+        for (List<T> subList : dataList) {
+            doSaveBatch(subList);
+        }
+    }
+
+    private void doSaveBatch(List<T> subList) {
+        String sql = getInsertSql();
+        try (Connection conn = ConnectionManager.getConn()) {
+            PreparedStatement ps = conn.prepareStatement(sql);
+            for (T t : subList) {
+                List<Object> values = getValues(t);
+                for (int i = 0; i < values.size(); i++) {
+                    ps.setObject(i + 1, values.get(i));
+                }
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException e) {
+            logger.error("execute sql exception", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    private List<Object> getValues(T t) {
+        List<Object> result = new ArrayList<>();
+        Field[] fields = getGenericClass().getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                result.add(field.get(t));
+            } catch (IllegalAccessException e) {
+                logger.error("get field value exception", e);
+                throw new RuntimeException(e);
+            }
+        }
+        return result;
+    }
+
+    private List<String> getAllColumns() {
+        return Arrays.stream(getGenericClass().getDeclaredFields()).map(this::getColumn).collect(Collectors.toList());
+    }
+
     private <R> R withConn(Func<Connection, R> func) {
         return func.apply(ConnectionManager.getConn());
     }
 
+    public List<T> getAll() {
+        String tab = getTable();
+        String sql = String.format("select * from %s ", tab);
+        return getList(sql);
+    }
+
     private List<T> getList(String sql, Object... params) {
-        Connection conn = ConnectionManager.getConn();
-        try {
+        try (Connection conn = ConnectionManager.getConn()) {
             PreparedStatement ps = conn.prepareStatement(sql);
             if (params != null) {
                 for (int i = 0; i < params.length; i++) {
@@ -80,8 +199,6 @@ public class BaseMapper<T> {
         } catch (SQLException e) {
             logger.error("execute sql exception", e);
             throw new RuntimeException(e);
-        } finally {
-            ConnectionManager.close(conn);
         }
     }
 
@@ -125,7 +242,7 @@ public class BaseMapper<T> {
     private String getColumn(Field field) {
         Column[] columns = field.getAnnotationsByType(Column.class);
         if (columns.length == 0) {
-            return field.getName();
+            return Utils.getSnakeCase(field.getName());
         }
         return columns[0].value();
     }
@@ -139,12 +256,70 @@ public class BaseMapper<T> {
 
     private String getTable() {
         Class<T> clazz = getGenericClass();
-        Table table = clazz.getAnnotationsByType(Table.class)[0];
-        return table.value();
+        Table[] tables = clazz.getAnnotationsByType(Table.class);
+        if (tables.length == 0) {
+            return Utils.getSnakeCase(clazz.getSimpleName());
+        }
+        return tables[0].value();
     }
 
     private Class<T> getGenericClass() {
         ParameterizedType parameterizedType = (ParameterizedType) getClass().getGenericSuperclass();
         return (Class<T>) parameterizedType.getActualTypeArguments()[0];
+    }
+
+    public void createTable() {
+//        CREATE TABLE COMPANY(
+//                ID INT PRIMARY KEY     NOT NULL,
+//                NAME           TEXT    NOT NULL,
+//                AGE            INT     NOT NULL,
+//                ADDRESS        CHAR(50),
+//                SALARY         REAL
+//        )
+        Field[] fields = getGenericClass().getDeclaredFields();
+        String tab = getTable();
+        String sql = "CREATE TABLE " + tab + "(";
+        for (Field field : fields) {
+            String column = getColumn(field);
+            String sqlType = getColumnType(field);
+            boolean isPrimaryKey = isPrimaryKey(field);
+            sql += column + "  " + sqlType + (isPrimaryKey ? " PRIMARY KEY NOT NULL " : "");
+            sql += ",";
+        }
+        sql = sql.substring(0, sql.length() - 1);
+        sql += ")";
+        executeSql(sql);
+    }
+
+    public int executeSql(String sql, Object... args) {
+        logger.info("execute sql:" + sql);
+        try (Connection conn = ConnectionManager.getConn()) {
+            PreparedStatement ps = conn.prepareStatement(sql);
+            if (args != null) {
+                for (int i = 0; i < args.length; i++) {
+                    ps.setObject(i + 1, args[i]);
+                }
+            }
+            return ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("execute sql exception", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    private boolean isPrimaryKey(Field field) {
+        Id[] ids = field.getAnnotationsByType(Id.class);
+        return ids.length > 0;
+    }
+
+    private String getColumnType(Field field) {
+        Class<?> type = field.getType();
+        if (String.class == type) {
+            return "TEXT";
+        } else if (Integer.class == type) {
+            return "INT";
+        } else {
+            throw new RuntimeException("not support type:" + type);
+        }
     }
 }

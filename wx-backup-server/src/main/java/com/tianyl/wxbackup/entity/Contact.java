@@ -1,9 +1,8 @@
 package com.tianyl.wxbackup.entity;
 
 import com.tianyl.wxbackup.mapper.core.Id;
-import com.tianyl.wxbackup.mapper.core.Table;
 
-@Table("contact")
+//@Table("contact")
 public class Contact {
 
     @Id
@@ -65,5 +64,17 @@ public class Contact {
 
     public void setWxType(Integer wxType) {
         this.wxType = wxType;
+    }
+
+    @Override
+    public String toString() {
+        return "Contact{" +
+                "username='" + username + '\'' +
+                ", alias='" + alias + '\'' +
+                ", remark='" + remark + '\'' +
+                ", nickname='" + nickname + '\'' +
+                ", type=" + type +
+                ", wxType=" + wxType +
+                '}';
     }
 }
