@@ -14,8 +14,12 @@ public class ConnectionManager {
 
     public static Connection getConn() {
         String backupDb = Config.DB_DIR + "/wechat-backup.db";
+        return getConn(backupDb);
+    }
+
+    public static Connection getConn(String file) {
         try {
-            return DriverManager.getConnection("jdbc:sqlite:" + backupDb);
+            return DriverManager.getConnection("jdbc:sqlite:" + file);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

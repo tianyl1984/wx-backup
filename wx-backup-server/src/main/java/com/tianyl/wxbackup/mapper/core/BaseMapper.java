@@ -1,6 +1,5 @@
 package com.tianyl.wxbackup.mapper.core;
 
-import com.tianyl.wxbackup.core.Func;
 import com.tianyl.wxbackup.core.Utils;
 import com.tianyl.wxbackup.db.ConnectionManager;
 import org.slf4j.Logger;
@@ -13,9 +12,11 @@ import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class BaseMapper<T> {
+public abstract class BaseMapper<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(BaseMapper.class);
+
+    public abstract Connection getConnection();
 
     public T get(Serializable id) {
         String tab = getTable();
@@ -35,16 +36,7 @@ public class BaseMapper<T> {
         // insert into tab(id,name) value(?,?)
         String sql = getInsertSql();
         List<Object> values = getValues(t);
-        try (Connection conn = ConnectionManager.getConn()) {
-            PreparedStatement ps = conn.prepareStatement(sql);
-            for (int i = 0; i < values.size(); i++) {
-                ps.setObject(i + 1, values.get(i));
-            }
-            return ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.error("execute sql exception", e);
-            throw new RuntimeException(e);
-        }
+        return executeSql(sql, values.toArray());
     }
 
     public int update(T t) {
@@ -112,7 +104,7 @@ public class BaseMapper<T> {
 
     private void doSaveBatch(List<T> subList) {
         String sql = getInsertSql();
-        try (Connection conn = ConnectionManager.getConn()) {
+        withConn(conn -> {
             PreparedStatement ps = conn.prepareStatement(sql);
             for (T t : subList) {
                 List<Object> values = getValues(t);
@@ -122,10 +114,8 @@ public class BaseMapper<T> {
                 ps.addBatch();
             }
             ps.executeBatch();
-        } catch (SQLException e) {
-            logger.error("execute sql exception", e);
-            throw new RuntimeException(e);
-        }
+            return null;
+        });
     }
 
     private List<Object> getValues(T t) {
@@ -148,7 +138,17 @@ public class BaseMapper<T> {
     }
 
     private <R> R withConn(Func<Connection, R> func) {
-        return func.apply(ConnectionManager.getConn());
+        Connection conn = getConnection();
+        try {
+            try {
+                return func.apply(conn);
+            } catch (SQLException e) {
+                logger.error("execute sql error", e);
+                throw new RuntimeException(e);
+            }
+        } finally {
+            ConnectionManager.close(conn);
+        }
     }
 
     public List<T> getAll() {
@@ -158,7 +158,7 @@ public class BaseMapper<T> {
     }
 
     private List<T> getList(String sql, Object... params) {
-        try (Connection conn = ConnectionManager.getConn()) {
+        return withConn(conn -> {
             PreparedStatement ps = conn.prepareStatement(sql);
             if (params != null) {
                 for (int i = 0; i < params.length; i++) {
@@ -196,10 +196,7 @@ public class BaseMapper<T> {
                 result.add(t);
             }
             return result;
-        } catch (SQLException e) {
-            logger.error("execute sql exception", e);
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     private T newInstance() {
@@ -293,7 +290,7 @@ public class BaseMapper<T> {
 
     public int executeSql(String sql, Object... args) {
         logger.info("execute sql:" + sql);
-        try (Connection conn = ConnectionManager.getConn()) {
+        return withConn(conn -> {
             PreparedStatement ps = conn.prepareStatement(sql);
             if (args != null) {
                 for (int i = 0; i < args.length; i++) {
@@ -301,10 +298,7 @@ public class BaseMapper<T> {
                 }
             }
             return ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.error("execute sql exception", e);
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     private boolean isPrimaryKey(Field field) {
