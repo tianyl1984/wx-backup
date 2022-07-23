@@ -1,5 +1,6 @@
 package com.tianyl.wxbackup.mapper.core;
 
+import com.tianyl.wxbackup.Result;
 import com.tianyl.wxbackup.core.Utils;
 import com.tianyl.wxbackup.db.ConnectionManager;
 import org.slf4j.Logger;
@@ -96,9 +97,21 @@ public abstract class BaseMapper<T> {
     }
 
     public void saveBatch(List<T> list) {
+        if (Utils.isEmpty(list)) {
+            return;
+        }
         List<List<T>> dataList = Utils.splitList(list);
         for (List<T> subList : dataList) {
             doSaveBatch(subList);
+        }
+    }
+
+    public void updateBatch(List<T> list) {
+        if (Utils.isEmpty(list)) {
+            return;
+        }
+        for (T t : list) {
+            update(t);
         }
     }
 
@@ -151,13 +164,7 @@ public abstract class BaseMapper<T> {
         }
     }
 
-    public List<T> getAll() {
-        String tab = getTable();
-        String sql = String.format("select * from %s ", tab);
-        return getList(sql);
-    }
-
-    private List<T> getList(String sql, Object... params) {
+    private <R> R withPreparedStatement(Func<PreparedStatement, R> func, String sql, Object... params) {
         return withConn(conn -> {
             PreparedStatement ps = conn.prepareStatement(sql);
             if (params != null) {
@@ -165,6 +172,18 @@ public abstract class BaseMapper<T> {
                     ps.setObject(i + 1, params[i]);
                 }
             }
+            return func.apply(ps);
+        });
+    }
+
+    public List<T> getAll() {
+        String tab = getTable();
+        String sql = String.format("select * from %s ", tab);
+        return getList(sql);
+    }
+
+    private List<T> getList(String sql, Object... params) {
+        return withPreparedStatement(ps -> {
             ResultSet rs = ps.executeQuery();
             List<String> labels = getResultSetLabels(rs);
             List<Map<String, Object>> resultMap = new ArrayList<>();
@@ -196,7 +215,7 @@ public abstract class BaseMapper<T> {
                 result.add(t);
             }
             return result;
-        });
+        }, sql, params);
     }
 
     private T newInstance() {
@@ -288,17 +307,33 @@ public abstract class BaseMapper<T> {
         executeSql(sql);
     }
 
+    public void autoCreateTable() {
+        boolean exist = isTableExist();
+        if (!exist) {
+            createTable();
+        }
+    }
+
+    private boolean isTableExist() {
+        String tab = getTable();
+        String sql = "select count(1) from sqlite_master where type = ? and name = ?";
+        int cnt = count(sql, "table", tab);
+        return cnt > 0;
+    }
+
+    private int count(String sql, Object... args) {
+        return withPreparedStatement(ps -> {
+            ResultSet rs = ps.executeQuery();
+            if (!rs.next()) {
+                return 0;
+            }
+            return rs.getInt(1);
+        }, sql, args);
+    }
+
     public int executeSql(String sql, Object... args) {
         logger.info("execute sql:" + sql);
-        return withConn(conn -> {
-            PreparedStatement ps = conn.prepareStatement(sql);
-            if (args != null) {
-                for (int i = 0; i < args.length; i++) {
-                    ps.setObject(i + 1, args[i]);
-                }
-            }
-            return ps.executeUpdate();
-        });
+        return withPreparedStatement(PreparedStatement::executeUpdate, sql, args);
     }
 
     private boolean isPrimaryKey(Field field) {

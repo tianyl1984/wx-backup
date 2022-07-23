@@ -2,6 +2,8 @@ package com.tianyl.wxbackup.entity;
 
 import com.tianyl.wxbackup.mapper.core.Id;
 
+import java.util.Objects;
+
 //@Table("contact")
 public class Contact {
 
@@ -64,6 +66,21 @@ public class Contact {
 
     public void setWxType(Integer wxType) {
         this.wxType = wxType;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Contact contact = (Contact) o;
+        return username.equals(contact.username) && Objects.equals(alias, contact.alias)
+                && Objects.equals(remark, contact.remark) && Objects.equals(nickname, contact.nickname)
+                && Objects.equals(type, contact.type) && Objects.equals(wxType, contact.wxType);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(username, alias, remark, nickname, type, wxType);
     }
 
     @Override
