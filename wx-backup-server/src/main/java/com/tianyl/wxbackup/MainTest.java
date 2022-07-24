@@ -1,17 +1,14 @@
 package com.tianyl.wxbackup;
 
-import com.tianyl.wxbackup.entity.Contact;
+import com.tianyl.wxbackup.mapper.ChatRoomMapper;
 import com.tianyl.wxbackup.mapper.ContactMapper;
-import com.tianyl.wxbackup.service.ExportService;
-import com.tianyl.wxbackup.wechat.entity.Rcontact;
-import com.tianyl.wxbackup.wechat.mapper.RcontactMapper;
-
-import java.util.List;
+import com.tianyl.wxbackup.service.ImportService;
 
 public class MainTest {
 
     public static void main(String[] args) {
-        ContactMapper mapper = new ContactMapper();
+        init();
+//        ContactMapper mapper = new ContactMapper();
 //        mapper.createTable();
 //        Contact contact = mapper.get("zhangsan");
 //        System.out.println(contact);
@@ -28,8 +25,13 @@ public class MainTest {
 //        RcontactMapper rcontactMapper = new RcontactMapper("D:\\wechat\\phone_files\\EnMicroMsg_plain.db");
 //        List<Rcontact> rcontacts = rcontactMapper.getAll();
 //        System.out.println();
-        ExportService exportService = new ExportService();
-        exportService.export("D:\\wechat\\phone_files");
+        ImportService importService = new ImportService();
+        importService.importAll("D:\\wechat\\phone_files");
+    }
+
+    private static void init() {
+        new ContactMapper().autoCreateTable();
+        new ChatRoomMapper().autoCreateTable();
     }
 
 }

@@ -1,6 +1,5 @@
 package com.tianyl.wxbackup.mapper.core;
 
-import com.tianyl.wxbackup.Result;
 import com.tianyl.wxbackup.core.Utils;
 import com.tianyl.wxbackup.db.ConnectionManager;
 import org.slf4j.Logger;
@@ -118,6 +117,7 @@ public abstract class BaseMapper<T> {
     private void doSaveBatch(List<T> subList) {
         String sql = getInsertSql();
         withConn(conn -> {
+            logger.info("execute sql:" + sql);
             PreparedStatement ps = conn.prepareStatement(sql);
             for (T t : subList) {
                 List<Object> values = getValues(t);
@@ -166,6 +166,7 @@ public abstract class BaseMapper<T> {
 
     private <R> R withPreparedStatement(Func<PreparedStatement, R> func, String sql, Object... params) {
         return withConn(conn -> {
+            logger.info("execute sql:" + sql);
             PreparedStatement ps = conn.prepareStatement(sql);
             if (params != null) {
                 for (int i = 0; i < params.length; i++) {
@@ -347,6 +348,8 @@ public abstract class BaseMapper<T> {
             return "TEXT";
         } else if (Integer.class == type) {
             return "INT";
+        } else if (Long.class == type) {
+            return "LONG";
         } else {
             throw new RuntimeException("not support type:" + type);
         }
